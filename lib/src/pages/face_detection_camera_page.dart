@@ -1,7 +1,6 @@
-import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 class FaceDetectionCameraPage extends StatefulWidget {
@@ -16,17 +15,21 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
   bool _isDetecting = false;
   bool _isTakingPhoto = false;
 
+  bool _isInitializedCamera = false;
+
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
-      enableContours: true,
-      enableClassification: true,
+      enableContours: true, // Precisamos dos contornos
+      minFaceSize: 0.5,
+      enableLandmarks: true,
+      performanceMode: FaceDetectorMode.accurate
     ),
   );
 
   @override
   void initState() {
-    super.initState();
     _initializeCamera();
+    super.initState();
   }
 
   @override
@@ -45,14 +48,16 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
 
     _cameraController = CameraController(
       camera,
-      ResolutionPreset.high,
+      ResolutionPreset.veryHigh,
       enableAudio: false,
     );
 
     await _cameraController.initialize();
     if (!mounted) return;
 
-    setState(() {});
+    setState(() {
+      _isInitializedCamera = true;
+    });
 
     _cameraController.startImageStream((CameraImage image) {
       if (!_isDetecting && !_isTakingPhoto) {
@@ -109,16 +114,51 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
       if (faces.isNotEmpty) {
         final face = faces.first;
 
-        // Log dos ângulos
-        print(
-            "headEulerAngleY: ${face.headEulerAngleY}, headEulerAngleZ: ${face.headEulerAngleZ}");
+        final boundingBox = face.boundingBox;
+        final isBigEnough = boundingBox.width >= imageSize.width * 0.4;
 
-        // Critério mais permissivo
+        // Lista dos contornos que queremos garantir
+        final requiredContours = [
+          FaceContourType.face,
+          FaceContourType.leftEyebrowTop,
+          FaceContourType.leftEyebrowBottom,
+          FaceContourType.rightEyebrowTop,
+          FaceContourType.rightEyebrowBottom,
+          FaceContourType.leftEye,
+          FaceContourType.rightEye,
+          FaceContourType.upperLipTop,
+          FaceContourType.upperLipBottom,
+          FaceContourType.lowerLipTop,
+          FaceContourType.lowerLipBottom,
+          FaceContourType.noseBridge,
+          FaceContourType.noseBottom,
+          FaceContourType.leftCheek,
+          FaceContourType.rightCheek
+        ];
+
+        bool allContoursPresent = true;
+
+        for (var contourType in requiredContours) {
+          final contour = face.contours[contourType];
+          if (contour == null || contour.points.isEmpty) {
+            allContoursPresent = false;
+            break;
+          }
+        }
+
         final bool isFacingForward =
-            (face.headEulerAngleY ?? 0).abs() < 25 &&
-                (face.headEulerAngleZ ?? 0).abs() < 25;
+            (face.headEulerAngleY ?? 0).abs() < 15 &&
+                (face.headEulerAngleZ ?? 0).abs() < 15;
 
-        if (isFacingForward) {
+        final isFullFace = isBigEnough && allContoursPresent && isFacingForward;
+
+        print("Face:");
+        print(face.contours);
+        print(face.landmarks);
+
+        print("Bounding box grande: $isBigEnough, todos contornos: $allContoursPresent");
+
+        if (isFullFace) {
           _isTakingPhoto = true;
           await _capturePhoto();
         }
@@ -148,7 +188,7 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_cameraController.value.isInitialized) {
+    if (!_isInitializedCamera) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -176,7 +216,7 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
             right: 0,
             child: Center(
               child: Text(
-                "Posicione seu rosto de frente",
+                "Mantenha todo o rosto visível",
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
