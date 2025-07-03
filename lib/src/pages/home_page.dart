@@ -99,7 +99,7 @@ class _HomePageState extends State<HomePage> {
     if (foundMatchName != null) {
       alertMessage("Sucesso!", "Bem vindo $foundMatchName", context);
     } else {
-      alertMessage("Resultado", "Usuário não reconhecido.", context);
+      alertMessage("Ops...", "Usuário não reconhecido.", context);
     }
   }
   

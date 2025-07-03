@@ -19,7 +19,7 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
 
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
-      enableContours: true, // Precisamos dos contornos
+      enableContours: true,
       minFaceSize: 0.5,
       enableLandmarks: true,
       performanceMode: FaceDetectorMode.accurate
@@ -69,6 +69,8 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
 
   Future<void> _processCameraImage(CameraImage image) async {
     try {
+      final initFunctionTime = DateTime.now();
+
       final WriteBuffer allBytes = WriteBuffer();
       for (final plane in image.planes) {
         allBytes.putUint8List(plane.bytes);
@@ -152,13 +154,10 @@ class _FaceDetectionCameraPageState extends State<FaceDetectionCameraPage> {
 
         final isFullFace = isBigEnough && allContoursPresent && isFacingForward;
 
-        print("Face:");
-        print(face.contours);
-        print(face.landmarks);
-
-        print("Bounding box grande: $isBigEnough, todos contornos: $allContoursPresent");
-
         if (isFullFace) {
+          final finalFunctionTime = DateTime.now();
+          print("Tempo de duração em Milliseconds: ${finalFunctionTime.difference(initFunctionTime).inMilliseconds}ms");
+
           _isTakingPhoto = true;
           await _capturePhoto();
         }
