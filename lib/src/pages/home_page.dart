@@ -1,5 +1,9 @@
-import 'dart:typed_data';
+import 'dart:io';
+
+import 'package:face_authentication_app/src/alerts/alert_core.dart';
+import 'package:face_authentication_app/src/entities/user_face.dart';
 import 'package:face_authentication_app/src/pages/face_detection_camera_page.dart';
+import 'package:face_authentication_app/src/pages/image_registration_sheet.dart';
 import 'package:face_authentication_app/src/services/face_authenticator_service.dart';
 import 'package:face_authentication_app/src/services/image_picker_service.dart';
 import 'package:flutter/material.dart';
@@ -15,11 +19,8 @@ class _HomePageState extends State<HomePage> {
   final _imagePickerService = ImagePickerService();
   final _faceAuthenticatorService = FaceAuthenticatorService();
 
-  final List<Uint8List> _registeredImages = [];
+  final List<UserFace> _registeredUsers = [];
   bool _isLoading = false;
-
-  String? _lastPhotoPath;
-
 
   @override
   void initState() {
@@ -39,69 +40,69 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isLoading = false);
 
     if (imageBytes != null) {
-      setState(() {
-        _registeredImages.add(imageBytes);
-      });
-      _showDialog("Cadastro", "Imagem cadastrada com sucesso!");
+      await ImageRegistrationSheet.show(
+        context: context,
+        imageBytes: imageBytes,
+        onConfirm: (name, bytes) {
+          setState(() {
+            _registeredUsers.add(UserFace(name: name, image: bytes));
+          });
+          alertMessage("Cadastro", "Imagem cadastrada com sucesso!", context);
+        },
+      );
     } else {
-      _showDialog("Cadastro", "Nenhuma imagem foi capturada.");
+      alertMessage("Cadastro", "Nenhuma imagem foi capturada.", context);
     }
   }
 
   Future<void> _verifyImage() async {
-    if (_registeredImages.isEmpty) {
-      _showDialog("Verificação", "Nenhuma imagem cadastrada para comparação.");
+    if (_registeredUsers.isEmpty) {
+      alertMessage(
+          "Verificação", 
+          "Nenhuma imagem cadastrada para comparação.", 
+          context
+      );
       return;
     }
 
     setState(() => _isLoading = true);
-    final testImage = await _imagePickerService.pickImageBytes();
-    setState(() => _isLoading = false);
+    final resultPath = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FaceDetectionCameraPage(),
+      ),
+    );
 
-    if (testImage == null) {
-      _showDialog("Verificação", "Nenhuma imagem foi capturada.");
+    if (resultPath == null || resultPath is! String) {
+      alertMessage("Verificação", "Nenhuma imagem foi capturada.", context);
       return;
     }
 
-    bool foundMatch = false;
+    String? foundMatchName;
 
     setState(() => _isLoading = true);
-    for (final registeredImage in _registeredImages) {
+    final testImage = await File(resultPath).readAsBytes();
+
+    for (final registeredUser in _registeredUsers) {
       final isMatch = await _faceAuthenticatorService.matchFaces(
-        imageBytesCurrent: registeredImage,
+        imageBytesCurrent: registeredUser.image,
         imageBytesTest: testImage,
       );
 
       if (isMatch) {
-        foundMatch = true;
+        foundMatchName = registeredUser.name;
         break;
       }
     }
     setState(() => _isLoading = false);
 
-    if (foundMatch) {
-      _showDialog("Resultado", "Usuário reconhecido com sucesso!");
+    if (foundMatchName != null) {
+      alertMessage("Sucesso!", "Bem vindo $foundMatchName", context);
     } else {
-      _showDialog("Resultado", "Usuário não reconhecido.");
+      alertMessage("Resultado", "Usuário não reconhecido.", context);
     }
   }
-
-  void _showDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          ),
-        ],
-      ),
-    );
-  }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,25 +129,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 24),
                 
-                ElevatedButton(
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FaceDetectionCameraPage(),
-                      ),
-                    );
-
-                    if (result != null && result is String) {
-                      setState(() {
-                        _lastPhotoPath = result;
-                      });
-                    }
-                  },
-                  child: const Text("Abrir Câmera"),
-                ),
-                
-                Text("Imagens cadastradas: ${_registeredImages.length}"),
+                Text("Imagens cadastradas: ${_registeredUsers.length}"),
               ],
             ),
           ),

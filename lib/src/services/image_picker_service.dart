@@ -8,6 +8,7 @@ class ImagePickerService{
   Future<Uint8List?> pickImageBytes() async {
     final pickedFile = await _imagePicker.pickImage(
       source: ImageSource.camera,
+      preferredCameraDevice: CameraDevice.front,
       maxWidth: 400,
       maxHeight: 400,
     );
